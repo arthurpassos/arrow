@@ -2093,41 +2093,17 @@ class FLBARecordReader : public TypedRecordReader<FLBAType>,
   std::unique_ptr<::arrow::FixedSizeBinaryBuilder> builder_;
 };
 
-// Below concept could be used to simplify type assertion, but it seems like c++20 is not
-// available
-//template <typename T>
-//concept ByteArrayTypeConcept = std::is_same<T, ByteArrayType>::value ||
-//                               std::is_same<T, LargeByteArrayType>::value;
-
-template<typename T>
-struct IsByteArrayType : std::false_type {};
-
-template<>
-struct IsByteArrayType<ByteArrayType> : std::true_type {};
-
-template<>
-struct IsByteArrayType<LargeByteArrayType> : std::true_type {};
-
-template<typename BAT>
-struct ByteArrayBuilderTypeTrait {
-  using BuilderType = typename std::conditional<std::is_same<BAT, LargeByteArrayType>::value,
-                                                ::arrow::LargeBinaryBuilder,
-                                                ::arrow::BinaryBuilder>::type;
-};
 
 template<typename BAT>
 class ChunkedRecordReader : public TypedRecordReader<BAT>,
                             virtual public BinaryRecordReader {
  public:
-  using BuilderType = typename ByteArrayBuilderTypeTrait<BAT>::BuilderType;
 
   ChunkedRecordReader(const ColumnDescriptor* descr, LevelInfo leaf_info,
                       ::arrow::MemoryPool* pool, bool read_dense_for_nullable)
-      : TypedRecordReader<BAT>(descr, leaf_info, pool,
-                                         read_dense_for_nullable) {
-    static_assert(IsByteArrayType<BAT>::value, "Invalid ByteArrayType");
+      : TypedRecordReader<BAT>(descr, leaf_info, pool, read_dense_for_nullable) {
     ARROW_DCHECK_EQ(TypedRecordReader<BAT>::descr_->physical_type(), Type::BYTE_ARRAY);
-    accumulator_.builder = std::make_unique<BuilderType>(pool);
+    accumulator_.builder = std::make_unique<typename EncodingTraits<BAT>::BinaryBuilder>(pool);
   }
 
   ::arrow::ArrayVector GetBuilderChunks() override {
@@ -2162,7 +2138,7 @@ class ChunkedRecordReader : public TypedRecordReader<BAT>,
 };
 
 using ByteArrayChunkedRecordReader = ChunkedRecordReader<ByteArrayType>;
-using LargeByteArrayChunkedRecordReader = ChunkedRecordReader<LargeByteArrayType>;
+using LargeByteArrayChunkedRecordReader = ChunkedRecordReader<Large>;
 
 
 template <typename BAT>
@@ -2249,7 +2225,6 @@ class DictionaryRecordReaderImpl : public TypedRecordReader<BAT>,
 };
 
 using ByteArrayDictionaryRecordReader = DictionaryRecordReaderImpl<ByteArrayType>;
-using LargeByteArrayDictionaryRecordReader = DictionaryRecordReaderImpl<LargeByteArrayType>;
 
 // TODO(wesm): Implement these to some satisfaction
 template <>
@@ -2281,7 +2256,7 @@ std::shared_ptr<RecordReader> MakeLargeByteArrayRecordReader(const ColumnDescrip
                                                              bool read_dictionary,
                                                              bool read_dense_for_nullable) {
   if (read_dictionary) {
-    return std::make_shared<LargeByteArrayDictionaryRecordReader>(descr, leaf_info, pool,
+    return std::make_shared<ByteArrayDictionaryRecordReader>(descr, leaf_info, pool,
                                                              read_dense_for_nullable);
   } else {
     return std::make_shared<LargeByteArrayChunkedRecordReader>(

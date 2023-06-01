@@ -61,7 +61,6 @@ using Int96Encoder = TypedEncoder<Int96Type>;
 using FloatEncoder = TypedEncoder<FloatType>;
 using DoubleEncoder = TypedEncoder<DoubleType>;
 using ByteArrayEncoder = TypedEncoder<ByteArrayType>;
-using LargeByteArrayEncoder = TypedEncoder<LargeByteArrayType>;
 using FLBAEncoder = TypedEncoder<FLBAType>;
 
 template <typename DType>
@@ -74,7 +73,6 @@ using Int96Decoder = TypedDecoder<Int96Type>;
 using FloatDecoder = TypedDecoder<FloatType>;
 using DoubleDecoder = TypedDecoder<DoubleType>;
 using ByteArrayDecoder = TypedDecoder<ByteArrayType>;
-using LargeByteArrayDecoder = TypedDecoder<LargeByteArrayType>;
 class FLBADecoder;
 
 template <typename T>
@@ -158,10 +156,15 @@ struct EncodingTraits<ByteArrayType> {
   static constexpr auto memory_limit = ::arrow::kBinaryMemoryLimit;
 };
 
+struct Large {
+  using c_type = typename type_traits<Type::BYTE_ARRAY>::value_type;
+  static constexpr Type::type type_num = Type::BYTE_ARRAY;
+};
+
 template <>
-struct EncodingTraits<LargeByteArrayType> {
-  using Encoder = LargeByteArrayEncoder;
-  using Decoder = LargeByteArrayDecoder;
+struct EncodingTraits<Large> {
+  using Encoder = ByteArrayEncoder;
+  using Decoder = ByteArrayDecoder;
   using BinaryBuilder = ::arrow::LargeBinaryBuilder;
 
   /// \brief Internal helper class for decoding BYTE_ARRAY data where we can
@@ -172,6 +175,7 @@ struct EncodingTraits<LargeByteArrayType> {
   };
   using ArrowType = ::arrow::LargeBinaryType;
   using DictAccumulator = ::arrow::Dictionary32Builder<::arrow::LargeBinaryType>;
+
 
   static constexpr auto memory_limit = ::arrow::kLargeBinaryMemoryLimit;
 };
